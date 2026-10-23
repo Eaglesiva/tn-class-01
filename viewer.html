@@ -323,6 +323,25 @@
       currentPageNum = parseInt(match[1]);
     }
 
+    // Load the term's flat page list so navigation can cross unit folders correctly
+    let pageList = null;
+    let pageListIndex = -1;
+    const bookMatch = pdfUrl.match(/^\.\/([^/]+)\/([^/]+)\//);
+    if (bookMatch) {
+      const pagesJsonUrl = `./${bookMatch[1]}/${bookMatch[2]}/pages.json`;
+      fetch(pagesJsonUrl).then(r => r.ok ? r.json() : null).then(list => {
+        if (!Array.isArray(list)) return;
+        pageList = list;
+        pageListIndex = list.indexOf(pdfUrl);
+        if (pageListIndex === -1) {
+          const norm = p => p.replace(/^\.\//, '');
+          pageListIndex = list.findIndex(p => norm(p) === norm(pdfUrl));
+        }
+        if (pageListIndex <= 0) btnPrevPage.disabled = true;
+        if (pageListIndex === list.length - 1) btnNextPage.disabled = true;
+      }).catch(() => { pageList = null; });
+    }
+
     // Always show navigation & popout everywhere
     btnPopout.style.display = 'flex';
     navPageGroup.style.display = 'flex';
@@ -370,6 +389,17 @@
     // Page Turners Navigation (Standalone Mode - Retains Zoom!)
     // ----------------------------------------------------
     function navigatePage(direction) {
+      // Prefer the flat page list (crosses unit/lesson folder boundaries correctly)
+      if (pageList && pageListIndex !== -1) {
+        const targetIndex = pageListIndex + direction;
+        if (targetIndex < 0 || targetIndex >= pageList.length) return;
+        const newSearch = new URLSearchParams(window.location.search);
+        newSearch.set('pdf', pageList[targetIndex]);
+        newSearch.delete('title');
+        window.location.search = newSearch.toString();
+        return;
+      }
+      // Fallback: naive same-folder page number increment (used only if pages.json is unavailable)
       const targetPage = currentPageNum + direction;
       if (targetPage < 1) return;
       const targetStr = targetPage.toString().padStart(2, '0');
