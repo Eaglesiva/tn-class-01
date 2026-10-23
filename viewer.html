@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes"/>
+  <title>தமிழ்நாடு பாடநூல் அசல் அச்சுப் பார்வை</title>
+  <script src="./vendor/pdfjs/pdf.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: #0b1329;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Tamil", sans-serif;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Enterprise Glassmorphic Header Toolbar - 2 Responsive Rows */
+    .viewer-header-bar {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      flex-direction: column;
+      padding: 6px 14px 8px 14px;
+      z-index: 100;
+      user-select: none;
+      gap: 6px;
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 8px;
+    }
+
+    .header-row-controls {
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 140px;
+      overflow: hidden;
+    }
+    .doc-badge {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .doc-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 320px;
+    }
+
+    /* Centered Zoom & Responsive Fit Controls */
+    .header-center {
+      display: flex;
+      align-items: center;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      padding: 2px 6px;
+      gap: 3px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+    }
+    .tool-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 13.5px;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+    .tool-btn.active {
+      background: #0284c7;
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(2, 132, 199, 0.5);
+    }
+    .zoom-text {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #38bdf8;
+      min-width: 44px;
+      text-align: center;
+    }
+
+    /* Book Page Navigation Arrows (Always visible on all screens!) */
+    .nav-page-group {
+      display: flex !important;
+      align-items: center;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      padding: 2px 6px;
+      gap: 3px;
+    }
+
+    /* Right Action Buttons (Fullscreen, Download, Pop-out) */
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .icon-action-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 15px;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .icon-action-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #38bdf8;
+    }
+    .icon-action-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #eab308;
+      margin: 0 4px;
+      transition: background 0.3s ease;
+    }
+    .status-dot.cached {
+      background: #10b981;
+    }
+
+    /* 2D Scroll Area */
+    .viewport-scroll-area {
+      flex: 1;
+      width: 100%;
+      overflow: auto;
+      position: relative;
+      background: #0b1329;
+      display: flex;
+      padding: 16px 14px 36px 14px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .viewport-scroll-area::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .viewport-scroll-area::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .viewport-scroll-area::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 5px;
+      border: 2px solid #0b1329;
+    }
+    .viewport-scroll-area::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Canvas Wrapper & 2D Pan */
+    .canvas-wrapper {
+      margin: auto;
+      position: relative;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.75);
+      border-radius: 6px;
+      background: #ffffff;
+      line-height: 0;
+      transition: box-shadow 0.2s ease;
+    }
+    .canvas-wrapper.draggable {
+      cursor: grab;
+    }
+    .canvas-wrapper.grabbing {
+      cursor: grabbing;
+    }
+
+    canvas {
+      display: block;
+      border-radius: 6px;
+    }
+
+    /* Loading Skeleton */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(6px);
+      border-radius: 6px;
+      transition: opacity 0.3s ease;
+      gap: 12px;
+      z-index: 10;
+    }
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(56, 189, 248, 0.2);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-text {
+      font-size: 13px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Enterprise Glassmorphic Header (Clean 2-Row Responsive Toolbar) -->
+  <header class="viewer-header-bar">
+    <!-- Row 1: Document Identity & Actions -->
+    <div class="header-row header-row-top">
+      <div class="header-left">
+        <span class="doc-badge">தமிழ்நாடு</span>
+        <span class="doc-title" id="docTitle">அரசுப் பாடநூல்</span>
+      </div>
+      <div class="header-right">
+        <span class="status-dot" id="cacheStatusDot" title="ஆஃப்லைன் சேமிப்பு நிலை"></span>
+        <button class="icon-action-btn" onclick="downloadPdf()" title="PDF கோப்பைப் பதிவிறக்கு (Download)">⬇️</button>
+        <button class="icon-action-btn" id="btnFullscreen" onclick="smartFullscreen()" title="முழுத்திரை (Fullscreen)">⛶</button>
+        <button class="icon-action-btn" id="btnPopout" onclick="openPopoutNewTab()" title="புதிய தாவலில் திற (Open in new tab / Pop-out)">↗️</button>
+      </div>
+    </div>
+
+    <!-- Row 2: Page Navigation & Zoom Controls (Always Visible Everywhere!) -->
+    <div class="header-row header-row-controls">
+      <div class="nav-page-group" id="navPageGroup">
+        <button class="tool-btn" id="btnPrevPage" onclick="navigatePage(-1)" title="முந்தைய பக்கம் (Previous Page)">◀ முந்தையது</button>
+        <span class="zoom-text" id="pageIndicator" style="color:#f8fafc; font-size:12px;">பக்கம்</span>
+        <button class="tool-btn" id="btnNextPage" onclick="navigatePage(1)" title="அடுத்த பக்கம் (Next Page)">அடுத்தது ▶</button>
+      </div>
+
+      <div class="header-center">
+        <button class="tool-btn" onclick="zoomChange(-0.25)" title="ஜூம் குறை (-)">&minus;</button>
+        <span class="zoom-text" id="zoomLabel">100%</span>
+        <button class="tool-btn" onclick="zoomChange(0.25)" title="ஜூம் அதிகரி (+)">&plus;</button>
+        <button class="tool-btn active" id="btnFitWidth" onclick="toggleFitToWidth()" title="திரையளவு தானாகப் பொருந்துதல் (Auto Fit Width)">⤢ திரையளவு</button>
+        <button class="tool-btn" onclick="resetZoom(1.0)" title="100% இயல்பு நிலை">100%</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2D Viewport Scroll Area -->
+  <main class="viewport-scroll-area" id="scrollArea">
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">அதிவேக வெக்டார் பக்கம் தயாராகிறது...</div>
+      </div>
+      <canvas id="pdfCanvas"></canvas>
+    </div>
+  </main>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js';
+
+    // Parse URL params
+    const params = new URLSearchParams(window.location.search);
+    const pdfUrl = params.get('pdf') || './tamil/term1/iel_1/01_inbatamil/page_02.pdf';
+    const customTitle = params.get('title');
+
+    // Check if embedded in iframe or running standalone
+    const isEmbedded = (window.self !== window.top);
+    const btnPopout = document.getElementById('btnPopout');
+    const navPageGroup = document.getElementById('navPageGroup');
+    const pageIndicator = document.getElementById('pageIndicator');
+    const btnPrevPage = document.getElementById('btnPrevPage');
+    const btnNextPage = document.getElementById('btnNextPage');
+
+    let currentPageNum = 1;
+    const match = pdfUrl.match(/page_(\d+)\.pdf/);
+    if (match) {
+      currentPageNum = parseInt(match[1]);
+    }
+
+    // Always show navigation & popout everywhere
+    btnPopout.style.display = 'flex';
+    navPageGroup.style.display = 'flex';
+    pageIndicator.textContent = `பக்கம் ${currentPageNum}`;
+    if (currentPageNum <= 1) btnPrevPage.disabled = true;
+
+    const docTitle = document.getElementById('docTitle');
+    if (customTitle) {
+      docTitle.textContent = customTitle;
+    } else if (match) {
+      docTitle.textContent = `இயல் பக்கம் ${currentPageNum}`;
+    }
+
+    let pdfDoc = null;
+    let baseViewport = null;
+    let currentScale = 1.0;
+    let isFitToWidthMode = true; // Auto-fit width responsive mode by default!
+    let isRendering = false;
+    let renderPending = false;
+
+    // Check stored user zoom preference from this reading session
+    const savedZoomMode = sessionStorage.getItem('tn_reader_zoom_mode');
+    if (savedZoomMode && savedZoomMode !== 'auto') {
+      const parsed = parseFloat(savedZoomMode);
+      if (!isNaN(parsed) && parsed >= 0.4 && parsed <= 4.0) {
+        currentScale = parsed;
+        isFitToWidthMode = false;
+      }
+    }
+
+    const scrollArea = document.getElementById('scrollArea');
+    const canvas = document.getElementById('pdfCanvas');
+    const ctx = canvas.getContext('2d');
+    const zoomLabel = document.getElementById('zoomLabel');
+    const btnFitWidth = document.getElementById('btnFitWidth');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const cacheStatusDot = document.getElementById('cacheStatusDot');
+    const canvasWrapper = document.getElementById('canvasWrapper');
+
+    if (!isFitToWidthMode) {
+      btnFitWidth.classList.remove('active');
+    }
+
+    // ----------------------------------------------------
+    // Page Turners Navigation (Standalone Mode - Retains Zoom!)
+    // ----------------------------------------------------
+    function navigatePage(direction) {
+      const targetPage = currentPageNum + direction;
+      if (targetPage < 1) return;
+      const targetStr = targetPage.toString().padStart(2, '0');
+      const newUrl = pdfUrl.replace(/page_\d+\.pdf/, `page_${targetStr}.pdf`);
+      const newSearch = new URLSearchParams(window.location.search);
+      newSearch.set('pdf', newUrl);
+      window.location.search = newSearch.toString();
+    }
+
+    // ----------------------------------------------------
+    // IndexedDB Cache Layer (100% Offline, Zero Redundant Downloads)
+    // ----------------------------------------------------
+    const DB_NAME = 'TNSchoolsPdfCache';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'pdf_blobs';
+
+    function openCacheDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function getCachedPdf(key) {
+      try {
+        const db = await openCacheDB();
+        return new Promise((resolve) => {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.get(key);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function setCachedPdf(key, arrayBuffer) {
+      try {
+        const db = await openCacheDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put(arrayBuffer, key);
+      } catch (e) {
+        console.warn('Cache write failed:', e);
+      }
+    }
+
+    // ----------------------------------------------------
+    // Progressive PDF Loading Pipeline
+    // ----------------------------------------------------
+    async function loadPdfDocument() {
+      const cached = await getCachedPdf(pdfUrl);
+      let pdfData;
+
+      if (cached) {
+        pdfData = cached;
+        cacheStatusDot.classList.add('cached');
+        cacheStatusDot.title = 'மின்வேக ஆஃப்லைன் போன் மெமரி (IndexedDB)';
+      } else {
+        const response = await fetch(pdfUrl);
+        pdfData = await response.arrayBuffer();
+        await setCachedPdf(pdfUrl, pdfData);
+        cacheStatusDot.classList.add('cached');
+        cacheStatusDot.title = 'Cloudflare CDN-லிருந்து டவுன்லோட் ஆகி சேமிக்கப்பட்டது';
+      }
+
+      const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+      pdfDoc = await loadingTask.promise;
+      const page = await pdfDoc.getPage(1);
+      baseViewport = page.getViewport({ scale: 1.0 });
+
+      // Automatically calculate scale to fit current screen width if in auto-fit mode
+      if (isFitToWidthMode) {
+        calculateAutoFitScale();
+      }
+
+      await renderPage(currentScale);
+      loadingOverlay.classList.add('hidden');
+    }
+
+    function calculateAutoFitScale() {
+      const availableWidth = scrollArea.clientWidth - 32;
+      currentScale = Math.min(2.0, Math.max(0.45, availableWidth / baseViewport.width));
+    }
+
+    // ----------------------------------------------------
+    // Dynamic Responsive Resizing (Orientation & Window Changes)
+    // ----------------------------------------------------
+    let resizeTimer = null;
+    function handleResponsiveResize() {
+      if (!baseViewport || !isFitToWidthMode) return;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        calculateAutoFitScale();
+        renderPage(currentScale);
+      }, 150);
+    }
+    window.addEventListener('resize', handleResponsiveResize);
+    window.addEventListener('orientationchange', handleResponsiveResize);
+
+    // ----------------------------------------------------
+    // HD Retina Canvas Rendering
+    // ----------------------------------------------------
+    async function renderPage(scale) {
+      if (isRendering) {
+        renderPending = true;
+        return;
+      }
+      isRendering = true;
+
+      const page = await pdfDoc.getPage(1);
+      const dpr = window.devicePixelRatio || 1;
+      const viewport = page.getViewport({ scale: scale });
+
+      // Canvas internal resolution (Vector Crisp)
+      canvas.width = Math.floor(viewport.width * dpr);
+      canvas.height = Math.floor(viewport.height * dpr);
+
+      // Display dimensions (matches viewport in CSS pixels)
+      canvas.style.width = Math.floor(viewport.width) + 'px';
+      canvas.style.height = Math.floor(viewport.height) + 'px';
+      canvasWrapper.style.width = Math.floor(viewport.width) + 'px';
+      canvasWrapper.style.height = Math.floor(viewport.height) + 'px';
+
+      // Update draggable cursor class when zoomed in
+      if (scale > 1.15) {
+        canvasWrapper.classList.add('draggable');
+      } else {
+        canvasWrapper.classList.remove('draggable');
+      }
+
+      const renderContext = {
+        canvasContext: ctx,
+        viewport: viewport,
+        transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
+      };
+
+      await page.render(renderContext).promise;
+      isRendering = false;
+
+      zoomLabel.textContent = Math.round(scale * 100) + '%';
+
+      if (renderPending) {
+        renderPending = false;
+        renderPage(currentScale);
+      }
+    }
+
+    // ----------------------------------------------------
+    // Zoom Controls & Session Memory
+    // ----------------------------------------------------
+    function zoomChange(delta) {
+      isFitToWidthMode = false;
+      btnFitWidth.classList.remove('active');
+      const newScale = Math.max(0.4, Math.min(4.0, currentScale + delta));
+      if (Math.abs(newScale - currentScale) > 0.04) {
+        currentScale = newScale;
+        sessionStorage.setItem('tn_reader_zoom_mode', currentScale.toFixed(2));
+        renderPage(currentScale);
+      }
+    }
+
+    function toggleFitToWidth() {
+      isFitToWidthMode = true;
+      btnFitWidth.classList.add('active');
+      sessionStorage.setItem('tn_reader_zoom_mode', 'auto');
+      calculateAutoFitScale();
+      renderPage(currentScale);
+    }
+
+    function resetZoom(target) {
+      isFitToWidthMode = false;
+      btnFitWidth.classList.remove('active');
+      currentScale = target || 1.0;
+      sessionStorage.setItem('tn_reader_zoom_mode', currentScale.toFixed(2));
+      renderPage(currentScale);
+    }
+
+    // ----------------------------------------------------
+    // Pop-out / Open in New Window (Pure Top-Level Context)
+    // ----------------------------------------------------
+    function openPopoutNewTab() {
+      window.open(window.location.href, '_blank', 'noopener');
+    }
+
+    // ----------------------------------------------------
+    // Smart Fullscreen (Native + Multi-Vendor + Popout Fallback)
+    // ----------------------------------------------------
+    function smartFullscreen() {
+      const docEl = document.documentElement;
+      const isFull = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
+      if (!isFull) {
+        const rfs = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+        if (rfs) {
+          try {
+            const p = rfs.call(docEl);
+            if (p && p.catch) {
+              p.catch(() => {
+                // If denied by parent iframe, open independent full tab
+                window.open(window.location.href, '_blank', 'noopener');
+              });
+            }
+          } catch (e) {
+            window.open(window.location.href, '_blank', 'noopener');
+          }
+        } else {
+          window.open(window.location.href, '_blank', 'noopener');
+        }
+      } else {
+        const efs = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+        if (efs) {
+          efs.call(document);
+        }
+      }
+    }
+
+    // Listen for fullscreen change to update icon/tooltip
+    document.addEventListener('fullscreenchange', () => {
+      const btn = document.getElementById('btnFullscreen');
+      if (document.fullscreenElement) {
+        btn.textContent = '✕';
+        btn.title = 'முழுத்திரையிலிருந்து வெளியேறு (Exit Fullscreen)';
+      } else {
+        btn.textContent = '⛶';
+        btn.title = 'முழுத்திரை (Fullscreen)';
+      }
+    });
+
+    // ----------------------------------------------------
+    // Download PDF
+    // ----------------------------------------------------
+    function downloadPdf() {
+      const a = document.createElement('a');
+      a.href = pdfUrl;
+      a.download = pdfUrl.split('/').pop() || 'tamil_book_page.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    // ----------------------------------------------------
+    // Mouse Drag / Pan when Zoomed In
+    // ----------------------------------------------------
+    let isMouseDown = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    scrollArea.addEventListener('mousedown', (e) => {
+      if (currentScale <= 1.1) return;
+      isMouseDown = true;
+      canvasWrapper.classList.add('grabbing');
+      startX = e.pageX - scrollArea.offsetLeft;
+      startY = e.pageY - scrollArea.offsetTop;
+      scrollLeft = scrollArea.scrollLeft;
+      scrollTop = scrollArea.scrollTop;
+    });
+
+    scrollArea.addEventListener('mouseleave', () => {
+      isMouseDown = false;
+      canvasWrapper.classList.remove('grabbing');
+    });
+
+    scrollArea.addEventListener('mouseup', () => {
+      isMouseDown = false;
+      canvasWrapper.classList.remove('grabbing');
+    });
+
+    scrollArea.addEventListener('mousemove', (e) => {
+      if (!isMouseDown) return;
+      e.preventDefault();
+      const x = e.pageX - scrollArea.offsetLeft;
+      const y = e.pageY - scrollArea.offsetTop;
+      const walkX = (x - startX) * 1.5;
+      const walkY = (y - startY) * 1.5;
+      scrollArea.scrollLeft = scrollLeft - walkX;
+      scrollArea.scrollTop = scrollTop - walkY;
+    });
+
+    // Start
+    loadPdfDocument().catch(err => {
+      console.error(err);
+      loadingOverlay.innerHTML = '<div style="color:#ef4444;font-weight:700;">பக்கம் ஏற்றுவதில் பிழை ஏற்பட்டது.</div>';
+    });
+  </script>
+</body>
+</html>
