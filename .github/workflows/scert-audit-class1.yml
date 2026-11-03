@@ -1,0 +1,38 @@
+name: SCERT Class 1 Audit (Term 1 Vol 1)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'scert/class-01/audit-**'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pymupdf requests
+
+      - name: Run Class 1 Audit
+        run: |
+          python .github/scripts/audit_class1.py
+
+      - name: Upload Audit Evidence Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: class-01-term1-vol1-audit-evidence
+          path: audit_artifacts/
+          if-no-files-found: error
