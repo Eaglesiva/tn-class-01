@@ -8,6 +8,12 @@
 
 ---
 
+## Evidence corrections (2026-11-05)
+
+- The Term-III 2026-27 records remain listed in the official API snapshot, but their CDN GET requests returned HTTP 403 during the 2026-11-04 audit. The current 2026-27 sales notices checked list Term-I and Term-II release dates; the general price list also lists Term-III titles. Therefore HTTP 403 is recorded as **CDN_UNAVAILABLE_AT_CHECK / RELEASE_STATUS_UNCONFIRMED**, not as proof that Term-III has not been published.
+- Do not describe all six Term-I/Term-II volumes as “Reprint 2024”. The official page-2 extraction in the audit manifest shows “© SCERT 2026” for Term-I Vol-I and “First Edition - 2026” for Term-I Vol-II Tamil; the other volumes have image-only or inconclusive text extraction and require visual page-2 review before assigning an imprint.
+- The two Term-I Vol-II split-validation summary strings in the CSV were corrected from 176/176 to 144/144. Their respective `split_validation.json` files report 144 master pages processed and all 144 passing validation.
+
 ## 1. Class-Wide Metric Reconciliation Table (34 Records Complete)
 
 | No. | Audit Verification Metric | Count | Reconciliation & Evidence Details |
@@ -16,13 +22,13 @@
 | 2 | **In-Scope Records (State Board Tamil & English)** | **9** | Core State Board academic books: 3 Term-I, 3 Term-II, 3 Term-III. |
 | 3 | **Out-of-Scope Records** | **25** | • 1 CBSE Tamil volume (`TAMIL(CBSE)`)<br>• 21 Minority language readers & mediums (Telugu, Kannada, Malayalam, Urdu, Hindi)<br>• 1 Value education supplementary module (`1st_Std_Value_Education_Module.pdf`)<br>• 2 Physical education teacher's resource books (Tamil & English) |
 | 4 | **Official URLs Successfully Downloaded & Audited** | **6** | All 6 currently released Term-I and Term-II State Board books sequentially downloaded to runner `/tmp/`, verified, and removed. |
-| 5 | **Official URLs Returning HTTP 403 on GET** | **3** | Exactly 3 Term-III State Board books returned HTTP 403 Forbidden on both HEAD and GET. Confirms official Textbook Corporation distribution schedule (Term-III 2026–27 PDFs not yet released). |
+| 5 | **Official URLs Returning HTTP 403 on GET** | **3** | Exactly 3 Term-III State Board books returned HTTP 403 Forbidden on both HEAD and GET. CDN GET returned HTTP 403 at audit time. Current 2026–27 sales notices checked list Term-I and Term-II; the general price list contains Term-III titles. Release status remains unconfirmed; recheck official notice/API. |
 | 6 | **Books Matching Existing Local Baseline** | **0** | Zero. All repository baseline folders contain legacy 2018/2022 reprint page files. |
 | 7 | **Books with Confirmed New/Different Edition (2026)** | **6** | All 6 downloaded books confirmed as 2026 combined curriculum volumes with higher page counts and differing text. |
 | 8 | **Books Successfully Split & Validated into 1-Page PDFs** | **6** | All 6 confirmed new edition books split into individual pages (**848 total pages**) with 100% passing structural validation (magic bytes, 1-page, renderable, size, continuity). |
 | 9 | **Books Ingested into Audit Branch Editions** | **6** | Ingested under immutable paths in `official_editions/2026-27/`: <br>• `term1/vol1_tamil_english/` (176p)<br>• `term1/vol2_maths_evs_tm/` (144p)<br>• `term1/vol2_maths_evs_em/` (144p)<br>• `term2/vol1_tamil_english/` (144p)<br>• `term2/vol2_maths_evs_tm/` (120p)<br>• `term2/vol2_maths_evs_em/` (120p) |
 | 10 | **Books Requiring Manual Review (TOC boundaries)** | **6** | All 6 combined volumes require unit-level manual review to map internal subject boundaries before production viewer routing. |
-| 11 | **Books Awaiting Official Release (Term-III)** | **3** | All 3 Term-III State Board books. |
+| 11 | **Term-III Books with CDN HTTP 403 / Release Status Unconfirmed** | **3** | All 3 Term-III State Board API records remain listed; CDN GET returned 403 at audit time. This does not by itself establish non-publication. |
 | 12 | **Books Not Checked** | **0** | Every single one of the 34 records was evaluated and cataloged. |
 
 ---
@@ -37,7 +43,7 @@
 | **Term-II** | **VOL-I (TAMIL& ENGLISH)** | Combined (`16,19`) | **144** | 112 (64p Tam + 48p Eng) | Compared 112p: text differs; +32 extra official pages | **144 / 144** | **SPLIT_VALIDATED** |
 | **Term-II** | **VOL-II (MATHS & EVS)** | Tamil (`16`) | **120** | 90 (52p Mat + 38p Sci) | Compared 90p: text differs; +30 extra official pages | **120 / 120** | **SPLIT_VALIDATED** |
 | **Term-II** | **VOL-II (MATHS & EVS)** | English (`19`) | **120** | 88 (52p Mat + 36p Sci) | Compared 88p: text differs; +32 extra official pages | **120 / 120** | **SPLIT_VALIDATED** |
-| **Term-III** | **VOL-I (TAMIL& ENGLISH)** | Combined (`16,19`) | — | 134 (75p Tam + 59p Eng) | GET returned HTTP 403 AccessDenied | — | **GET_HTTP_403_FORBIDDEN** |
+| **Term-III** | **VOL-I (TAMIL& ENGLISH)** | Combined (`16,19`) | — | 134 (75p Tam + 59p Eng) | GET returned HTTP 403 AccessDenied | — | **GET_HTTP_403_FORBIDDEN / RELEASE_UNCONFIRMED** |
 | **Term-III** | **VOL-II (MATHS & EVS)** | Tamil (`16`) | — | 116 (68p Mat + 48p Sci) | GET returned HTTP 403 AccessDenied | — | **GET_HTTP_403_FORBIDDEN** |
 | **Term-III** | **VOL-II (MATHS & EVS)** | English (`19`) | — | 116 (67p Mat + 49p Sci) | GET returned HTTP 403 AccessDenied | — | **GET_HTTP_403_FORBIDDEN** |
 
