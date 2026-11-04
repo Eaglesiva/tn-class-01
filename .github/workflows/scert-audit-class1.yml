@@ -1,4 +1,4 @@
-name: SCERT Class 1 Audit (Term 1 Vol 1)
+name: SCERT Class 1 Full Audit and Edition Processing
 
 on:
   workflow_dispatch:
@@ -7,14 +7,17 @@ on:
       - 'scert/class-01/audit-**'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  full_audit_and_edition_split:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,13 +29,33 @@ jobs:
           pip install --upgrade pip
           pip install pymupdf requests
 
-      - name: Run Class 1 Audit
+      - name: Run Full Class 1 Audit and Edition Processing
         run: |
-          python .github/scripts/audit_class1.py
+          python .github/scripts/audit_class1_full.py
 
-      - name: Upload Audit Evidence Artifacts
+      - name: Verify Git Safety & Check Staged Files
+        run: |
+          git status
+          # Verify zero master PDFs present
+          find . -maxdepth 3 -name "*.pdf" | grep -i "master" && exit 1 || echo "Zero master PDFs present in repo."
+
+      - name: Upload Complete Class 1 Audit Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: class-01-term1-vol1-audit-evidence
-          path: audit_artifacts/
+          name: class-01-full-audit-and-edition-evidence
+          path: |
+            class_01_official_api_snapshot.json
+            class_01_2026_27_audit_manifest.csv
+            class_01_audit_summary.md
+            audit_artifacts/
+            official_editions/
           if-no-files-found: error
+
+      - name: Commit and Push Edition & Audit Files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add class_01_official_api_snapshot.json class_01_2026_27_audit_manifest.csv class_01_audit_summary.md official_editions/
+          git status --short
+          git commit -m "feat(scert): complete Class 1 audit manifest and ingest 2026 Term 1 Vol 1 edition"
+          git push origin HEAD:${{ github.ref_name }}
