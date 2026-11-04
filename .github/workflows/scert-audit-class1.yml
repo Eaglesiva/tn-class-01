@@ -29,20 +29,20 @@ jobs:
           pip install --upgrade pip
           pip install pymupdf requests
 
-      - name: Run Full Class 1 Audit and Edition Processing
+      - name: Run Comprehensive Class 1 Audit and Ingestion
         run: |
-          python .github/scripts/audit_class1_full.py
+          python .github/scripts/audit_class1_comprehensive.py
 
       - name: Verify Git Safety & Check Staged Files
         run: |
           git status
           # Verify zero master PDFs present
-          find . -maxdepth 3 -name "*.pdf" | grep -i "master" && exit 1 || echo "Zero master PDFs present in repo."
+          find . -maxdepth 4 -name "*.pdf" | grep -i "master" && exit 1 || echo "Zero master PDFs present in repo."
 
       - name: Upload Complete Class 1 Audit Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: class-01-full-audit-and-edition-evidence
+          name: class-01-comprehensive-audit-evidence
           path: |
             class_01_official_api_snapshot.json
             class_01_2026_27_audit_manifest.csv
@@ -57,5 +57,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add class_01_official_api_snapshot.json class_01_2026_27_audit_manifest.csv class_01_audit_summary.md official_editions/
           git status --short
-          git commit -m "feat(scert): complete Class 1 audit manifest and ingest 2026 Term 1 Vol 1 edition"
+          git commit -m "feat(scert): complete comprehensive Class 1 audit (34 records) and ingest all 2026 edition splits"
           git push origin HEAD:${{ github.ref_name }}
