@@ -1,0 +1,57 @@
+name: Class 01 Micro Page-2 and TOC Text Extraction
+
+on:
+  push:
+    branches:
+      - scert/class-01/micro-extract-2026-11-07
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the existing Class 01 audit source (read-only)
+        uses: actions/checkout@v4
+        with:
+          ref: scert/class-01/audit-2026-27-term1-vol1
+          path: source
+          persist-credentials: false
+
+      - name: Checkout this isolated micro-extraction branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          path: output
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PDF text extraction dependency
+        run: |
+          python -m pip install --upgrade pip
+          pip install pymupdf
+
+      - name: Extract Page 2 and TOC candidate text from the six existing books
+        run: |
+          python output/.github/scripts/micro_extract_class01.py --source source --output output/micro-extraction
+
+      - name: Commit only the text-extraction report
+        run: |
+          git -C output config user.name "github-actions[bot]"
+          git -C output config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C output add micro-extraction/
+          git -C output status --short
+          git -C output commit -m "docs(class-01): add Page 2 and TOC text extraction report"
+          git -C output push origin HEAD:${{ github.ref_name }}
+
+      - name: Upload text report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: class-01-page2-toc-text-extraction
+          path: output/micro-extraction/
+          if-no-files-found: error
