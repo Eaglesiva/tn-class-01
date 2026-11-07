@@ -16,8 +16,8 @@ BOOKS = [
 TOC_TERMS = ["பொருளடக்கம்", "பொருளடக்க", "உள்ளடக்கம்", "contents", "table of contents"]
 
 def clean_text(text):
-    text = (text or "").replace("\\x00", "")
-    return "\\n".join(line.rstrip() for line in text.splitlines()).strip()
+    text = (text or "").replace("\x00", "")
+    return "\n".join(line.rstrip() for line in text.splitlines()).strip()
 
 def get_single_page_text(path):
     with fitz.open(path) as doc:
@@ -115,7 +115,7 @@ def main():
                 item["text"] or "[NO SELECTABLE TEXT]",
             ])
         text_file = text_dir / f"{slug}.txt"
-        text_file.write_text("\\n".join(extracted) + "\\n", encoding="utf-8")
+        text_file.write_text("\n".join(extracted) + "\n", encoding="utf-8")
 
         result = {
             "slug": slug,
@@ -170,7 +170,7 @@ def main():
     report_json = output / "class_01_page2_toc_extraction.json"
     report_md = output / "class_01_page2_toc_extraction.md"
     report_json.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
-    report_md.write_text("\\n".join(md) + "\\n", encoding="utf-8")
+    report_md.write_text("\n".join(md) + "\n", encoding="utf-8")
 
     print(f"BOOKS_PROCESSED={len(results)}")
     print(f"PAGE2_SINGLE_PAGE_FILES={sum(1 for x in results if x['page2_pdf_page_count'] == 1)}")
