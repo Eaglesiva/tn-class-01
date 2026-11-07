@@ -11,7 +11,13 @@ REPO = "Eaglesiva/tn-class-01"
 SOURCE_COMMIT = "838d5c2f335810ed95753327fe0a0b94ad298a63"
 RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/{SOURCE_COMMIT}/"
 MAX_FRONT_PAGES = 40
-TOC_TERMS = ["பொருளடக்கம்", "பொருளடக்க", "உள்ளடக்கம்", "contents", "table of contents"]
+EXTRA_PROBE_PAGES = {
+    "term1-vol2-maths-evs-tm": [55, 60, 65, 70, 75, 80, 85, 90, 95],
+    "term2-vol1-tamil-english": [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100],
+    "term2-vol2-maths-evs-tm": [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95],
+    "term2-vol2-maths-evs-em": [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95],
+}
+TOC_TERMS = ["பொருளடக்கம்", "ெபாருளடக்கம்", "பொருளடக்க", "உள்ளடக்கம்", "contents", "table of contents"]
 BOOKS = [
     ("term1-vol1-tamil-english", "official_editions/2026-27/term1/vol1_tamil_english", "Term-I · VOL-I (TAMIL & ENGLISH)"),
     ("term1-vol2-maths-evs-tm", "official_editions/2026-27/term1/vol2_maths_evs_tm", "Term-I · VOL-II (MATHS & EVS) · Tamil"),
@@ -43,7 +49,7 @@ def download_page(job):
     book_slug, rel_dir, page_number, rel_page = job
     url = RAW_BASE + rel_dir + "/" + rel_page
     data = get_bytes(url)
-    render = page_number == 2 or (book_slug.startswith("term2-") and page_number <= 20)
+    render = page_number == 2 or page_number in EXTRA_PROBE_PAGES.get(book_slug, [])
     text, pdf_page_count, image_png = pdf_text(data, render=render)
     return {
         "book_slug": book_slug,
@@ -79,7 +85,10 @@ def main():
             "edition": edition, "page_list": page_list,
             "page2_rel": page2_rel,
         }
-        for number, rel_page in enumerate(page_list[:MAX_FRONT_PAGES], start=1):
+        selected_numbers = set(range(1, min(MAX_FRONT_PAGES, len(page_list)) + 1))
+        selected_numbers.update(n for n in EXTRA_PROBE_PAGES.get(slug, []) if 1 <= n <= len(page_list))
+        for number in sorted(selected_numbers):
+            rel_page = page_list[number - 1]
             jobs.append((slug, rel_dir, number, rel_page))
 
     page_results = []
@@ -113,7 +122,7 @@ def main():
         "# Class 01 — Page 2 and TOC Text Extraction",
         "",
         f"**Immutable source commit:** {SOURCE_COMMIT}",
-        f"**Method:** Downloaded only the first {MAX_FRONT_PAGES} existing split pages per book from GitHub and extracted text with PyMuPDF.",
+        f"**Method:** Downloaded the first {MAX_FRONT_PAGES} pages plus selected TOC-probe pages from the immutable GitHub commit; extracted text with PyMuPDF and rendered selected page images.",
         "**Scope:** Read-only. No PDFs were generated or rewritten; no production branch or source audit branch was changed.",
         "",
         "The Page 2 PDF already exists in each book's pages directory. This run validates and extracts that existing file; it does not create a duplicate.",
