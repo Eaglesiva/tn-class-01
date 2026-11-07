@@ -20,3 +20,7 @@
 The copied files are documentation/evidence only. The original audit branch remains unchanged. Do not merge the audit branch into `main`, change `active_edition`, replace production page sets, or archive current main content based only on this manifest. Apply the canonical SCERT Edition Gate, whole-book comparison, TOC/page-map and viewer checks first.
 
 See the [Common SCERT Edition Verification Blueprint](https://github.com/Eaglesiva/tn-schools-project/blob/main/docs/01-blueprint/SCERT_CLASSWISE_EDITION_VERIFICATION_BLUEPRINT.md) and the [Common Audit Evidence Index](https://github.com/Eaglesiva/tn-schools-project/blob/main/docs/07-audit-evidence/README.md).
+
+## Common master register
+
+[Open Class 1 in the one-click Master Cross-Verification Index](https://github.com/Eaglesiva/tn-schools-project/blob/main/docs/03-edition-register/MASTER_CROSS_VERIFICATION_INDEX.md#class-1)
