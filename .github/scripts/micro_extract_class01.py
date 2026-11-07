@@ -12,10 +12,10 @@ SOURCE_COMMIT = "838d5c2f335810ed95753327fe0a0b94ad298a63"
 RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/{SOURCE_COMMIT}/"
 MAX_FRONT_PAGES = 40
 EXTRA_PROBE_PAGES = {
-    "term1-vol2-maths-evs-tm": [55, 60, 65, 70, 75, 80, 85, 90, 95],
-    "term2-vol1-tamil-english": [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100],
-    "term2-vol2-maths-evs-tm": [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95],
-    "term2-vol2-maths-evs-em": [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95],
+    "term1-vol2-maths-evs-tm": [81, 82, 83, 84, 85, 86, 87, 88, 89, 90],
+    "term2-vol1-tamil-english": [81, 82, 83, 84, 85, 86, 87, 88],
+    "term2-vol2-maths-evs-tm": [70, 71, 72, 73, 74, 75, 76, 77],
+    "term2-vol2-maths-evs-em": [70, 71, 72, 73, 74, 75, 76, 77],
 }
 TOC_TERMS = ["பொருளடக்கம்", "ெபாருளடக்கம்", "பொருளடக்க", "உள்ளடக்கம்", "contents", "table of contents"]
 BOOKS = [
