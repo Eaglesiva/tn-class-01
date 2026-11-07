@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
-"""Read existing Class 1 split PDFs and extract Page 2 + TOC evidence."""
+"""Fetch only the first 40 split pages from the immutable audit commit and extract Page 2/TOC text."""
 import argparse
+import concurrent.futures
 import json
 from pathlib import Path
+import requests
 import fitz
 
+REPO = "Eaglesiva/tn-class-01"
+SOURCE_COMMIT = "838d5c2f335810ed95753327fe0a0b94ad298a63"
+RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/{SOURCE_COMMIT}/"
+MAX_FRONT_PAGES = 40
+TOC_TERMS = ["பொருளடக்கம்", "பொருளடக்க", "உள்ளடக்கம்", "contents", "table of contents"]
 BOOKS = [
     ("term1-vol1-tamil-english", "official_editions/2026-27/term1/vol1_tamil_english", "Term-I · VOL-I (TAMIL & ENGLISH)"),
     ("term1-vol2-maths-evs-tm", "official_editions/2026-27/term1/vol2_maths_evs_tm", "Term-I · VOL-II (MATHS & EVS) · Tamil"),
@@ -13,174 +20,207 @@ BOOKS = [
     ("term2-vol2-maths-evs-tm", "official_editions/2026-27/term2/vol2_maths_evs_tm", "Term-II · VOL-II (MATHS & EVS) · Tamil"),
     ("term2-vol2-maths-evs-em", "official_editions/2026-27/term2/vol2_maths_evs_em", "Term-II · VOL-II (MATHS & EVS) · English"),
 ]
-TOC_TERMS = ["பொருளடக்கம்", "பொருளடக்க", "உள்ளடக்கம்", "contents", "table of contents"]
 
-def clean_text(text):
-    text = (text or "").replace("\x00", "")
-    return "\n".join(line.rstrip() for line in text.splitlines()).strip()
+def get_bytes(url):
+    response = requests.get(url, timeout=(15, 90))
+    response.raise_for_status()
+    return response.content
 
-def get_single_page_text(path):
-    with fitz.open(path) as doc:
-        if len(doc) < 1:
+def get_json(url):
+    return json.loads(get_bytes(url).decode("utf-8"))
+
+def pdf_text(data):
+    with fitz.open(stream=data, filetype="pdf") as doc:
+        if len(doc) == 0:
             return "", 0
-        return clean_text(doc[0].get_text("text")), len(doc)
+        return (doc[0].get_text("text") or "").strip(), len(doc)
+
+def download_page(job):
+    book_slug, rel_dir, page_number, rel_page = job
+    url = RAW_BASE + rel_dir + "/" + rel_page
+    data = get_bytes(url)
+    text, pdf_page_count = pdf_text(data)
+    return {
+        "book_slug": book_slug,
+        "book_page": page_number,
+        "path": rel_dir + "/" + rel_page,
+        "text": text,
+        "pdf_page_count": pdf_page_count,
+        "byte_count": len(data),
+        "url": url,
+    }
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    source = Path(args.source).resolve()
     output = Path(args.output).resolve()
     text_dir = output / "extracted-text"
     text_dir.mkdir(parents=True, exist_ok=True)
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Class01-MicroEditionTextAudit/1.0"})
 
+    jobs = []
+    book_meta = {}
+    for slug, rel_dir, label in BOOKS:
+        edition = get_json(RAW_BASE + rel_dir + "/edition.json")
+        page_list = get_json(RAW_BASE + rel_dir + "/pages.json")
+        page2_rel = next((p for p in page_list if Path(p).name == "page-002.pdf"), None)
+        if not page2_rel:
+            raise RuntimeError(f"page-002.pdf is absent from pages.json for {label}")
+        book_meta[slug] = {
+            "slug": slug, "path": rel_dir, "label": label,
+            "edition": edition, "page_list": page_list,
+            "page2_rel": page2_rel,
+        }
+        for number, rel_page in enumerate(page_list[:MAX_FRONT_PAGES], start=1):
+            jobs.append((slug, rel_dir, number, rel_page))
+
+    page_results = []
+    errors = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        future_map = {pool.submit(download_page, job): job for job in jobs}
+        for future in concurrent.futures.as_completed(future_map):
+            job = future_map[future]
+            try:
+                page_results.append(future.result())
+            except Exception as exc:
+                errors.append({
+                    "book_slug": job[0], "book_page": job[2],
+                    "path": job[1] + "/" + job[3], "error": str(exc)
+                })
+
+    page_results.sort(key=lambda x: (x["book_slug"], x["book_page"]))
     results = []
     md = [
         "# Class 01 — Page 2 and TOC Text Extraction",
         "",
-        "**Source branch:** scert/class-01/audit-2026-27-term1-vol1",
-        "**Method:** PyMuPDF extraction from existing page-split PDFs.",
-        "**Scope:** Read-only. No source PDF, page manifest, production file, or viewer file changed.",
+        f"**Immutable source commit:** {SOURCE_COMMIT}",
+        f"**Method:** Downloaded only the first {MAX_FRONT_PAGES} existing split pages per book from GitHub and extracted text with PyMuPDF.",
+        "**Scope:** Read-only. No PDFs were generated or rewritten; no production branch or source audit branch was changed.",
         "",
-        "Text extraction is not visual proof. Empty or garbled text remains marked for manual review.",
+        "The Page 2 PDF already exists in each book's pages directory. This run validates and extracts that existing file; it does not create a duplicate.",
         "",
     ]
 
     for slug, rel_dir, label in BOOKS:
-        folder = source / rel_dir
-        page_list = json.loads((folder / "pages.json").read_text(encoding="utf-8"))
-        edition = json.loads((folder / "edition.json").read_text(encoding="utf-8"))
-        page2_rel = next((p for p in page_list if Path(p).name == "page-002.pdf"), None)
-        if not page2_rel:
-            raise RuntimeError(f"Page 2 not listed for {label}")
-        page2_path = folder / page2_rel
-        if not page2_path.exists():
-            raise FileNotFoundError(str(page2_path))
-        page2_text, page2_count = get_single_page_text(page2_path)
+        meta = book_meta[slug]
+        pages = [p for p in page_results if p["book_slug"] == slug]
+        page2 = next((p for p in pages if p["path"] == rel_dir + "/" + meta["page2_rel"]), None)
+        if page2 is None:
+            page2_error = next((e for e in errors if e["book_slug"] == slug and e["book_page"] == 2), None)
+            raise RuntimeError(f"Unable to extract Page 2 for {label}: {page2_error}")
+        candidates = []
+        for p in pages:
+            lowered = p["text"].casefold()
+            hits = [term for term in TOC_TERMS if term.casefold() in lowered]
+            if hits:
+                candidates.append({
+                    "book_page": p["book_page"],
+                    "path": p["path"],
+                    "matched_terms": hits,
+                    "text": p["text"],
+                    "url": p["url"],
+                })
+        status = "KEYWORD_CANDIDATES_FOUND" if candidates else f"NO_KEYWORD_MATCH_IN_FIRST_{MAX_FRONT_PAGES}_PAGES"
 
-        toc_candidates = []
-        first_pages = []
-        missing = []
-        invalid = []
-        for number, rel_page in enumerate(page_list, start=1):
-            pdf_path = folder / rel_page
-            if not pdf_path.exists():
-                missing.append(rel_page)
-                continue
-            try:
-                page_text, page_count = get_single_page_text(pdf_path)
-                if page_count != 1:
-                    invalid.append({"path": rel_page, "pdf_page_count": page_count})
-                if number <= 30:
-                    first_pages.append({"book_page": number, "path": rel_page, "text": page_text})
-                lowered = page_text.casefold()
-                hits = [term for term in TOC_TERMS if term.casefold() in lowered]
-                if hits:
-                    toc_candidates.append({
-                        "book_page": number,
-                        "path": rel_page,
-                        "matched_terms": hits,
-                        "text": page_text,
-                    })
-            except Exception as exc:
-                invalid.append({"path": rel_page, "error": str(exc)})
-
-        extracted = [
-            f"# {label}",
+        txt = [
+            "# " + label,
             "",
-            f"Book folder: {rel_dir}",
-            f"Page 2 file: {rel_dir}/{page2_rel}",
+            "Book folder: " + rel_dir,
+            "Page 2 PDF: " + page2["path"],
             "",
-            "## Page 2 extracted text",
-            page2_text or "[NO SELECTABLE TEXT — visual review required]",
+            "## Extracted Page 2 text",
+            page2["text"] or "[NO SELECTABLE TEXT — visual review required]",
             "",
-            "## TOC keyword matches",
+            "## TOC keyword candidates",
         ]
-        if toc_candidates:
-            for candidate in toc_candidates:
-                extracted.extend([
+        if candidates:
+            for c in candidates:
+                txt.extend([
                     "",
-                    f"### Printed PDF page {candidate['book_page']} ({candidate['path']})",
-                    "Matched terms: " + ", ".join(candidate["matched_terms"]),
-                    candidate["text"] or "[NO SELECTABLE TEXT]",
+                    f"### Printed PDF page {c['book_page']} — {', '.join(c['matched_terms'])}",
+                    c["text"] or "[NO SELECTABLE TEXT]",
+                    "Source: " + c["url"],
                 ])
         else:
-            extracted.extend(["", "[No explicit TOC keyword found. See first 30 pages below.]"])
-        extracted.extend(["", "## First 30 pages"])
-        for item in first_pages:
-            extracted.extend([
+            txt.extend(["", "[No explicit TOC keyword detected in the first 40 pages.]"])
+        txt.extend(["", "## First 40 page text"])
+        for p in pages:
+            txt.extend([
                 "",
-                f"### Printed PDF page {item['book_page']} ({item['path']})",
-                item["text"] or "[NO SELECTABLE TEXT]",
+                f"### Printed PDF page {p['book_page']}",
+                p["text"] or "[NO SELECTABLE TEXT]",
             ])
-        text_file = text_dir / f"{slug}.txt"
-        text_file.write_text("\n".join(extracted) + "\n", encoding="utf-8")
+        text_path = text_dir / f"{slug}.txt"
+        text_path.write_text("\n".join(txt) + "\n", encoding="utf-8")
 
         result = {
-            "slug": slug,
-            "label": label,
-            "book_path": rel_dir,
-            "page_count_from_manifest": len(page_list),
-            "page2_path": f"{rel_dir}/{page2_rel}",
-            "page2_pdf_page_count": page2_count,
-            "page2_text": page2_text,
-            "page2_text_status": "EXTRACTED" if page2_text else "IMAGE_ONLY_OR_NO_TEXT",
-            "toc_candidate_pages": toc_candidates,
-            "toc_status": "KEYWORD_CANDIDATES_FOUND" if toc_candidates else "NO_KEYWORD_MATCH_FIRST_30_PAGES_EXPORTED",
-            "missing_page_files": missing,
-            "invalid_page_files": invalid,
-            "edition_json": edition,
-            "extracted_text_file": str(text_file.relative_to(output)),
+            "slug": slug, "label": label, "book_path": rel_dir,
+            "manifest_total_pages": len(meta["page_list"]),
+            "page2_path": page2["path"],
+            "page2_url": page2["url"],
+            "page2_is_single_page_pdf": page2["pdf_page_count"] == 1,
+            "page2_text_status": "EXTRACTED" if page2["text"] else "IMAGE_ONLY_OR_NO_TEXT",
+            "page2_text": page2["text"],
+            "toc_status": status,
+            "toc_candidates": candidates,
+            "front_pages_downloaded": len(pages),
+            "download_errors": [e for e in errors if e["book_slug"] == slug],
+            "edition_json": meta["edition"],
+            "extracted_text_file": str(text_path.relative_to(output)),
         }
         results.append(result)
-
         md.extend([
             f"## {label}",
             "",
-            f"- Book folder: {rel_dir}",
-            f"- Manifest pages: **{len(page_list)}**",
-            f"- Page 2 PDF: {rel_dir}/{page2_rel}",
-            f"- Page 2 file page count: {page2_count}",
-            f"- Page 2 text status: **{result['page2_text_status']}**",
-            f"- Existing edition metadata imprint: {edition.get('printed_imprint', 'UNKNOWN')}",
-            f"- TOC candidate pages: {', '.join(str(x['book_page']) for x in toc_candidates) if toc_candidates else 'No explicit keyword match'}",
-            f"- Missing page files: {len(missing)}",
-            f"- Invalid split files: {len(invalid)}",
-            f"- Full extracted text: {text_file.relative_to(output)}",
+            f"- PDF folder: {rel_dir}",
+            f"- Total book pages from manifest: **{len(meta['page_list'])}**",
+            f"- Page 2 PDF: [{page2['path']}]({page2['url']})",
+            f"- Page 2 is a one-page PDF: **{page2['pdf_page_count'] == 1}**",
+            f"- Page 2 extraction status: **{result['page2_text_status']}**",
+            f"- Existing edition.json imprint field: {meta['edition'].get('printed_imprint', 'UNKNOWN')}",
+            f"- TOC status: **{status}**",
+            f"- TOC candidate PDF pages: {', '.join(str(c['book_page']) for c in candidates) if candidates else 'Not found in first 40 pages'}",
+            f"- Extracted text file: {result['extracted_text_file']}",
             "",
             "### Page 2 extracted text",
             "",
-            page2_text or "[NO SELECTABLE TEXT — visual review required]",
+            page2["text"] or "[NO SELECTABLE TEXT — visual review required]",
             "",
             "### TOC candidate text",
             "",
         ])
-        if toc_candidates:
-            for candidate in toc_candidates:
+        if candidates:
+            for c in candidates:
                 md.extend([
-                    f"**Printed PDF page {candidate['book_page']}** — " + ", ".join(candidate["matched_terms"]),
+                    f"**Printed PDF page {c['book_page']}** — " + ", ".join(c["matched_terms"]),
                     "",
-                    candidate["text"] or "[NO SELECTABLE TEXT]",
+                    c["text"] or "[NO SELECTABLE TEXT]",
                     "",
                 ])
         else:
-            md.extend(["No explicit TOC keyword found. See the companion TXT file for first-30-page text.", ""])
+            md.extend(["No explicit TOC keyword was detected in the first 40 pages. Review companion TXT before marking TOC.", ""])
 
     report_json = output / "class_01_page2_toc_extraction.json"
     report_md = output / "class_01_page2_toc_extraction.md"
-    report_json.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+    report_json.write_text(json.dumps({"books": results, "download_errors": errors}, ensure_ascii=False, indent=2), encoding="utf-8")
     report_md.write_text("\n".join(md) + "\n", encoding="utf-8")
 
-    print(f"BOOKS_PROCESSED={len(results)}")
-    print(f"PAGE2_SINGLE_PAGE_FILES={sum(1 for x in results if x['page2_pdf_page_count'] == 1)}")
-    print(f"TOTAL_MANIFEST_PAGES={sum(x['page_count_from_manifest'] for x in results)}")
-    print(f"MISSING_PAGE_FILES={sum(len(x['missing_page_files']) for x in results)}")
-    print(f"INVALID_SPLIT_FILES={sum(len(x['invalid_page_files']) for x in results)}")
+    print("BOOKS_PROCESSED=" + str(len(results)))
+    print("PAGE2_SINGLE_PAGE_FILES=" + str(sum(1 for x in results if x["page2_is_single_page_pdf"])))
+    print("TOTAL_PAGES_IN_BOOKS=" + str(sum(x["manifest_total_pages"] for x in results)))
+    print("FRONT_PAGE_PDFS_DOWNLOADED=" + str(len(page_results)))
+    print("DOWNLOAD_ERRORS=" + str(len(errors)))
     for item in results:
-        print(f"{item['slug']}: PAGE2={item['page2_text_status']}; TOC={item['toc_status']}; PAGES={[x['book_page'] for x in item['toc_candidate_pages']]}")
-    print(f"REPORT_MD={report_md}")
-    print(f"REPORT_JSON={report_json}")
+        print("\n### " + item["label"])
+        print("Page 2 status: " + item["page2_text_status"])
+        print("Page 2 text:\n" + (item["page2_text"] or "[NO SELECTABLE TEXT]"))
+        print("TOC status: " + item["toc_status"])
+        for candidate in item["toc_candidates"]:
+            print(f"TOC CANDIDATE PAGE {candidate['book_page']}:\n{candidate['text']}")
+    print("REPORT_MD=" + str(report_md))
+    print("REPORT_JSON=" + str(report_json))
 
 if __name__ == "__main__":
     main()
