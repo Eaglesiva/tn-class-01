@@ -7,24 +7,31 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   extract:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the existing Class 01 audit source (read-only)
+      - name: Checkout only the six existing edition page sets
         uses: actions/checkout@v4
         with:
           ref: scert/class-01/audit-2026-27-term1-vol1
           path: source
+          fetch-depth: 1
           persist-credentials: false
+          sparse-checkout: |
+            official_editions/2026-27
 
-      - name: Checkout this isolated micro-extraction branch
+      - name: Checkout only the extraction script
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
-          path: output
+          path: tools
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: |
+            .github/scripts
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,20 +45,11 @@ jobs:
 
       - name: Extract Page 2 and TOC candidate text from the six existing books
         run: |
-          python output/.github/scripts/micro_extract_class01.py --source source --output output/micro-extraction
-
-      - name: Commit only the text-extraction report
-        run: |
-          git -C output config user.name "github-actions[bot]"
-          git -C output config user.email "github-actions[bot]@users.noreply.github.com"
-          git -C output add micro-extraction/
-          git -C output status --short
-          git -C output commit -m "docs(class-01): add Page 2 and TOC text extraction report"
-          git -C output push origin HEAD:${{ github.ref_name }}
+          python tools/.github/scripts/micro_extract_class01.py --source source --output micro-output
 
       - name: Upload text report artifact
         uses: actions/upload-artifact@v4
         with:
           name: class-01-page2-toc-text-extraction
-          path: output/micro-extraction/
+          path: micro-output/
           if-no-files-found: error
