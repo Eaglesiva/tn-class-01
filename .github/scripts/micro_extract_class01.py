@@ -29,17 +29,22 @@ def get_bytes(url):
 def get_json(url):
     return json.loads(get_bytes(url).decode("utf-8"))
 
-def pdf_text(data):
+def pdf_text(data, render=False):
     with fitz.open(stream=data, filetype="pdf") as doc:
         if len(doc) == 0:
-            return "", 0
-        return (doc[0].get_text("text") or "").strip(), len(doc)
+            return "", 0, None
+        text = (doc[0].get_text("text") or "").strip()
+        image_png = None
+        if render:
+            image_png = doc[0].get_pixmap(dpi=120, alpha=False).tobytes("png")
+        return text, len(doc), image_png
 
 def download_page(job):
     book_slug, rel_dir, page_number, rel_page = job
     url = RAW_BASE + rel_dir + "/" + rel_page
     data = get_bytes(url)
-    text, pdf_page_count = pdf_text(data)
+    render = page_number == 2 or (book_slug.startswith("term2-") and page_number <= 20)
+    text, pdf_page_count, image_png = pdf_text(data, render=render)
     return {
         "book_slug": book_slug,
         "book_page": page_number,
@@ -48,6 +53,7 @@ def download_page(job):
         "pdf_page_count": pdf_page_count,
         "byte_count": len(data),
         "url": url,
+        "image_png": image_png,
     }
 
 def main():
@@ -91,6 +97,17 @@ def main():
                 })
 
     page_results.sort(key=lambda x: (x["book_slug"], x["book_page"]))
+    rendered_dir = output / "rendered-pages"
+    rendered_count = 0
+    for page in page_results:
+        if page.get("image_png"):
+            book_render_dir = rendered_dir / page["book_slug"]
+            book_render_dir.mkdir(parents=True, exist_ok=True)
+            image_path = book_render_dir / f"page-{page['book_page']:03d}.png"
+            image_path.write_bytes(page["image_png"])
+            page["rendered_image_path"] = str(image_path.relative_to(output))
+            page["image_png"] = None
+            rendered_count += 1
     results = []
     md = [
         "# Class 01 — Page 2 and TOC Text Extraction",
@@ -161,6 +178,7 @@ def main():
             "page2_path": page2["path"],
             "page2_url": page2["url"],
             "page2_is_single_page_pdf": page2["pdf_page_count"] == 1,
+            "page2_rendered_image": page2.get("rendered_image_path"),
             "page2_text_status": "EXTRACTED" if page2["text"] else "IMAGE_ONLY_OR_NO_TEXT",
             "page2_text": page2["text"],
             "toc_status": status,
@@ -178,6 +196,7 @@ def main():
             f"- Total book pages from manifest: **{len(meta['page_list'])}**",
             f"- Page 2 PDF: [{page2['path']}]({page2['url']})",
             f"- Page 2 is a one-page PDF: **{page2['pdf_page_count'] == 1}**",
+            f"- Page 2 rendered image: {page2.get('rendered_image_path', 'not rendered')}",
             f"- Page 2 extraction status: **{result['page2_text_status']}**",
             f"- Existing edition.json imprint field: {meta['edition'].get('printed_imprint', 'UNKNOWN')}",
             f"- TOC status: **{status}**",
@@ -212,6 +231,7 @@ def main():
     print("TOTAL_PAGES_IN_BOOKS=" + str(sum(x["manifest_total_pages"] for x in results)))
     print("FRONT_PAGE_PDFS_DOWNLOADED=" + str(len(page_results)))
     print("DOWNLOAD_ERRORS=" + str(len(errors)))
+    print("RENDERED_PNG_FILES=" + str(rendered_count))
     for item in results:
         print("\n### " + item["label"])
         print("Page 2 status: " + item["page2_text_status"])
